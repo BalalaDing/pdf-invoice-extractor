@@ -4,70 +4,132 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PDF Invoice Extractor</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="./assets/pdfjs/pdf.min.js"></script>
 <script>
-  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  pdfjsLib.GlobalWorkerOptions.workerSrc = './assets/pdfjs/pdf.worker.min.js';
 </script>
 <style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f9fafb; min-height: 100vh; padding: 1.5rem; color: #374151; }
+  .container { max-width: 1280px; margin: 0 auto; }
+  .header { margin-bottom: 2rem; text-align: center; }
+  .header h1 { font-size: 1.875rem; font-weight: 700; color: #1f2937; margin-bottom: 0.25rem; }
+  .header p { color: #6b7280; font-size: 0.875rem; }
+
+  #uploadZone { border: 2px dashed #d1d5db; border-radius: 1rem; background: #fff; padding: 2.5rem; text-align: center; cursor: pointer; transition: all 0.2s; margin-bottom: 1.5rem; }
+  #uploadZone:hover { border-color: #818cf8; background: #eef2ff; }
   #uploadZone.dragover { border-color: #6366f1; background: #eef2ff; }
-  .status-dot { width:10px; height:10px; border-radius:50%; display:inline-block; }
+  #uploadZone .icon { font-size: 3rem; margin-bottom: 0.75rem; }
+  #uploadZone .label { color: #4b5563; font-weight: 500; }
+  #uploadZone .sublabel { color: #9ca3af; font-size: 0.875rem; margin-top: 0.25rem; }
+  #uploadZone input[type="file"] { display: none; }
+  .btn-primary { margin-top: 1rem; padding: 0.5rem 1.5rem; background: #4f46e5; color: #fff; border: none; border-radius: 0.5rem; cursor: pointer; font-size: 0.875rem; transition: background 0.2s; }
+  .btn-primary:hover { background: #4338ca; }
+
+  #progressArea { margin-bottom: 1.5rem; }
+  #progressArea.hidden { display: none; }
+  .progress-item { display: flex; align-items: center; gap: 0.75rem; background: #fff; border-radius: 0.75rem; padding: 0.75rem 1rem; box-shadow: 0 1px 2px rgba(0,0,0,0.05); font-size: 0.875rem; margin-bottom: 0.5rem; }
+  .progress-item .name { flex: 1; color: #374151; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .progress-item .status { color: #9ca3af; }
+  .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+
+  #controls { margin-bottom: 1.5rem; display: flex; gap: 0.75rem; }
+  #controls.hidden { display: none; }
+  .btn-export { padding: 0.5rem 1.25rem; background: #059669; color: #fff; border: none; border-radius: 0.5rem; cursor: pointer; font-size: 0.875rem; font-weight: 500; transition: background 0.2s; }
+  .btn-export:hover { background: #047857; }
+  .btn-clear { padding: 0.5rem 1.25rem; background: #fee2e2; color: #dc2626; border: none; border-radius: 0.5rem; cursor: pointer; font-size: 0.875rem; font-weight: 500; transition: background 0.2s; }
+  .btn-clear:hover { background: #fecaca; }
+
+  #resultsArea { background: #fff; border-radius: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); overflow: hidden; }
+  #resultsArea.hidden { display: none; }
+  .results-header { padding: 1rem 1.5rem; border-bottom: 1px solid #f3f4f6; display: flex; align-items: center; justify-content: space-between; }
+  .results-header h2 { font-size: 1.125rem; font-weight: 600; color: #374151; }
+  .results-header span { font-size: 0.875rem; color: #9ca3af; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+  thead { background: #f9fafb; }
+  thead th { padding: 0.75rem 1rem; text-align: left; color: #6b7280; text-transform: uppercase; font-size: 0.75rem; font-weight: 600; }
+  thead th.right { text-align: right; }
+  thead th.center { text-align: center; }
+  tbody tr { border-top: 1px solid #f3f4f6; }
+  tbody tr:hover { background: #f9fafb; }
+  tbody td { padding: 0.75rem 1rem; }
+  td.file { color: #6b7280; font-size: 0.75rem; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  td.plant { font-weight: 500; color: #1f2937; }
+  td.date { color: #374151; white-space: nowrap; }
+  td.id { font-family: monospace; font-size: 0.75rem; color: #1d4ed8; white-space: nowrap; }
+  td.desc { color: #374151; }
+  td.price { text-align: right; font-family: monospace; color: #1f2937; }
+  td.qty { text-align: center; color: #374151; }
+  td.total { text-align: right; font-weight: 600; font-family: monospace; color: #111827; }
+  td.currency { text-align: center; }
+  .currency-badge { background: #fef3c7; color: #92400e; border-radius: 0.25rem; padding: 0.125rem 0.375rem; font-size: 0.75rem; font-family: monospace; }
+
+  #debugArea { margin-top: 1rem; }
+  details { background: #fff; border-radius: 0.75rem; box-shadow: 0 1px 2px rgba(0,0,0,0.05); font-size: 0.75rem; margin-bottom: 0.75rem; }
+  details summary { padding: 0.5rem 1rem; cursor: pointer; color: #6b7280; }
+  details summary:hover { color: #374151; }
+  details pre { padding: 0 1rem 0.75rem; color: #9ca3af; white-space: pre-wrap; overflow-x: auto; max-height: 12rem; }
+
+  .notice { margin-top: 2rem; text-align: center; font-size: 0.75rem; color: #9ca3af; }
 </style>
 </head>
-<body class="bg-gray-50 min-h-screen p-6">
-<div class="max-w-7xl mx-auto">
+<body>
+<div class="container">
 
-  <div class="mb-8 text-center">
-    <h1 class="text-3xl font-bold text-gray-800 mb-1">📄 PDF Invoice Extractor</h1>
-    <p class="text-gray-500 text-sm">Upload PDF invoices to automatically extract and organize key information into a table</p>
+  <div class="header">
+    <h1>📄 PDF Invoice Extractor</h1>
+    <p>Upload PDF invoices to automatically extract and organize key information into a table</p>
   </div>
 
-  <!-- Upload Zone (drag & drop + click) -->
-  <div id="uploadZone" onclick="document.getElementById('fileInput').click()" class="border-2 border-dashed border-gray-300 rounded-2xl bg-white p-10 text-center cursor-pointer hover:border-indigo-400 hover:bg-indigo-50 transition-all mb-6">
-    <div class="text-5xl mb-3">📂</div>
-    <p class="text-gray-600 font-medium">Drag & drop PDF files here, or click to select</p>
-    <p class="text-gray-400 text-sm mt-1">Multiple PDFs supported</p>
-    <input type="file" id="fileInput" multiple accept=".pdf" class="hidden">
-    <button type="button" onclick="event.stopPropagation(); document.getElementById('fileInput').click()" class="mt-4 px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">Select Files</button>
+  <!-- Upload Zone -->
+  <div id="uploadZone" onclick="document.getElementById('fileInput').click()">
+    <div class="icon">📂</div>
+    <p class="label">Drag & drop PDF files here, or click to select</p>
+    <p class="sublabel">Multiple PDFs supported</p>
+    <input type="file" id="fileInput" multiple accept=".pdf">
+    <button type="button" class="btn-primary" onclick="event.stopPropagation(); document.getElementById('fileInput').click()">Select Files</button>
   </div>
 
   <!-- Progress -->
-  <div id="progressArea" class="hidden mb-6 space-y-2"></div>
+  <div id="progressArea" class="hidden"></div>
 
   <!-- Controls -->
-  <div id="controls" class="hidden flex gap-3 mb-6">
-    <button onclick="exportCSV()" class="px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-sm font-medium">⬇️ Export CSV</button>
-    <button onclick="clearAll()" class="px-5 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition text-sm font-medium">🗑️ Clear All</button>
+  <div id="controls" class="hidden">
+    <button onclick="exportCSV()" class="btn-export">⬇️ Export CSV</button>
+    <button onclick="clearAll()" class="btn-clear">🗑️ Clear All</button>
   </div>
 
   <!-- Results Table -->
-  <div id="resultsArea" class="hidden bg-white rounded-2xl shadow overflow-hidden">
-    <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-      <h2 class="text-lg font-semibold text-gray-700">📊 Extracted Results</h2>
-      <span id="resultCount" class="text-sm text-gray-400"></span>
+  <div id="resultsArea" class="hidden">
+    <div class="results-header">
+      <h2>📊 Extracted Results</h2>
+      <span id="resultCount"></span>
     </div>
-    <div class="overflow-x-auto">
-      <table class="w-full text-sm">
-        <thead class="bg-gray-50 text-gray-600 uppercase text-xs">
+    <div class="table-wrap">
+      <table>
+        <thead>
           <tr>
-            <th class="px-4 py-3 text-left">File</th>
-            <th class="px-4 py-3 text-left">Plant</th>
-            <th class="px-4 py-3 text-left">Date</th>
-            <th class="px-4 py-3 text-left">ID</th>
-            <th class="px-4 py-3 text-left">Description</th>
-            <th class="px-4 py-3 text-right">Unit Price</th>
-            <th class="px-4 py-3 text-center">Qty</th>
-            <th class="px-4 py-3 text-right">Line Total</th>
-            <th class="px-4 py-3 text-center">Currency</th>
+            <th>File</th>
+            <th>Plant</th>
+            <th>Date</th>
+            <th>ID</th>
+            <th>Description</th>
+            <th class="right">Unit Price</th>
+            <th class="center">Qty</th>
+            <th class="right">Line Total</th>
+            <th class="center">Currency</th>
           </tr>
         </thead>
-        <tbody id="tableBody" class="divide-y divide-gray-100"></tbody>
+        <tbody id="tableBody"></tbody>
       </table>
     </div>
   </div>
 
   <!-- Raw text debug -->
-  <div id="debugArea" class="mt-4 space-y-3"></div>
+  <div id="debugArea"></div>
+
+  <p class="notice">All files are processed locally in your browser. No data is uploaded to any server.</p>
 
 </div>
 
@@ -93,8 +155,8 @@ function handleFiles(files) {
 async function processFile(file) {
   const area = document.getElementById('progressArea');
   const div = document.createElement('div');
-  div.className = 'flex items-center gap-3 bg-white rounded-xl px-4 py-3 shadow-sm text-sm';
-  div.innerHTML = `<span class="status-dot bg-yellow-400"></span><span class="flex-1 text-gray-700 truncate">${file.name}</span><span class="text-gray-400">Processing...</span>`;
+  div.className = 'progress-item';
+  div.innerHTML = `<span class="status-dot" style="background:#facc15"></span><span class="name">${file.name}</span><span class="status">Processing...</span>`;
   area.appendChild(div);
 
   try {
@@ -103,11 +165,11 @@ async function processFile(file) {
     const data = parse(text, file.name);
     allRows.push(...data);
     renderTable();
-    div.querySelector('span').style.background = '#22c55e';
-    div.querySelector('span:last-child').textContent = `✅ ${data.length} rows extracted`;
+    div.querySelector('.status-dot').style.background = '#22c55e';
+    div.querySelector('.status').textContent = `✅ ${data.length} rows extracted`;
   } catch(e) {
-    div.querySelector('span').style.background = '#ef4444';
-    div.querySelector('span:last-child').textContent = '❌ Parse failed';
+    div.querySelector('.status-dot').style.background = '#ef4444';
+    div.querySelector('.status').textContent = '❌ Parse failed';
     console.error(e);
   }
 }
@@ -242,17 +304,16 @@ function renderTable() {
   tbody.innerHTML = '';
   allRows.forEach((r, i) => {
     const tr = document.createElement('tr');
-    tr.className = i % 2 === 0 ? 'bg-white hover:bg-gray-50' : 'bg-gray-50 hover:bg-gray-100';
     tr.innerHTML = `
-      <td class="px-4 py-3 text-gray-500 text-xs max-w-xs truncate" title="${r.filename}">${r.filename}</td>
-      <td class="px-4 py-3 font-medium text-gray-800">${r.plant||'—'}</td>
-      <td class="px-4 py-3 text-gray-700 whitespace-nowrap">${r.date||'—'}</td>
-      <td class="px-4 py-3 font-mono text-xs text-blue-700 whitespace-nowrap">${r.routeId||'—'}</td>
-      <td class="px-4 py-3 text-gray-700">${r.description||'—'}</td>
-      <td class="px-4 py-3 text-right text-gray-800 font-mono">${r.unitPrice||'—'}</td>
-      <td class="px-4 py-3 text-center text-gray-700">${r.qty||'—'}</td>
-      <td class="px-4 py-3 text-right font-semibold text-gray-900 font-mono">${r.lineTotal||'—'}</td>
-      <td class="px-4 py-3 text-center"><span class="bg-yellow-100 text-yellow-700 rounded px-1.5 text-xs font-mono">${r.currency||'—'}</span></td>
+      <td class="file" title="${r.filename}">${r.filename}</td>
+      <td class="plant">${r.plant||'—'}</td>
+      <td class="date">${r.date||'—'}</td>
+      <td class="id">${r.routeId||'—'}</td>
+      <td class="desc">${r.description||'—'}</td>
+      <td class="price">${r.unitPrice||'—'}</td>
+      <td class="qty">${r.qty||'—'}</td>
+      <td class="total">${r.lineTotal||'—'}</td>
+      <td class="currency"><span class="currency-badge">${r.currency||'—'}</span></td>
     `;
     tbody.appendChild(tr);
   });
@@ -287,8 +348,7 @@ function clearAll() {
 function addDebug(name, text) {
   const area = document.getElementById('debugArea');
   const div = document.createElement('details');
-  div.className = 'bg-white rounded-xl shadow-sm text-xs';
-  div.innerHTML = `<summary class="px-4 py-2 cursor-pointer text-gray-500 hover:text-gray-700">🔍 Raw text: ${name}</summary><pre class="px-4 pb-3 text-gray-400 whitespace-pre-wrap overflow-x-auto max-h-48">${text.substring(0,3000)}</pre>`;
+  div.innerHTML = `<summary>🔍 Raw text: ${name}</summary><pre>${text.substring(0,3000)}</pre>`;
   area.appendChild(div);
 }
 </script>
